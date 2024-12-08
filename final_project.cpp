@@ -456,6 +456,11 @@ public:
 
 int main() {
 
+  // Define Timer
+  using timer = std::chrono::steady_clock;
+  timer::time_point before = timer::now();
+  auto after = timer::now();
+
   // Exercise 53.1 CODE Start
 
   // Define matrices using vectors
@@ -465,6 +470,7 @@ int main() {
   vector<vector<int>> d(a.size(), vector<int>(b[0].size(), 0)); // Initialize result matrix with zeros
 
   // Perform matrix multiplication
+  before = timer::now();
   for (int i = 0; i < a.size(); i++) { // Rows of a
       for (int j = 0; j < b[0].size(); j++) { // Columns of b
           for (int k = 0; k < a[0].size(); k++) { // Columns of a / Rows of b
@@ -472,6 +478,7 @@ int main() {
           }
       }
   }
+  after = timer::now();
 
   // Output result
   cout << "Straightforward Output" << '\n';
@@ -481,8 +488,10 @@ int main() {
       }
       cout << "\n";
   }
+  cout << "Straightforward Output took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   // Permuted Algorithm to Perform matrix multiplication
+  before = timer::now();
   for (int j = 0; j < b[0].size(); j++) { // Columns of b
         for (int i = 0; i < a.size(); i++) { // Rows of a
             for (int k = 0; k < a[0].size(); k++) { // Columns of a / Rows of b
@@ -490,6 +499,7 @@ int main() {
             }
         }
   }
+  after = timer::now();
 
   // Permuted Algorithm Output result
   cout << "\nPermuted Algorithm Output:" << '\n';
@@ -499,6 +509,7 @@ int main() {
       }
       cout << "\n";
   }
+  cout << "Permuted Algorithm took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   // Exercise 53.1 CODE End
 
@@ -514,13 +525,18 @@ int main() {
   B.print();
 
   cout << "\nTraditional Matrix-Matrix Multiplication (A * B):\n";
+  before = timer::now();
   Matrix C = A.MatMult(B);
+  after = timer::now();
   C.print();
+  cout << "Traditional Matrix-Matrix Multiplication took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   cout << "\nRecursive Matrix-Matrix Multiplication (A * B):\n";
   Matrix D = A.MatMultRecur(B);
+  before = timer::now();
   D.print();
-
+  after = timer::now();
+  cout << "Recursive Matrix-Matrix Multiplication took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
   // Exercise 53.2 CODE End
 
   // Exercise 53.4 CODE Start
@@ -594,11 +610,14 @@ int main() {
   three.print();
 
   // Add matrices together
+  before = timer::now();
   Matrix_Span four = two.addMatrices(three, result_data, result);
+  after = timer::now();
 
   // Print added matrix
   cout <<"\nAdded Matrix (Two + Three):\n";
   four.print();
+  cout << "Adding Two Matrices took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   // Exercise 53.6 CODE End
 
@@ -629,11 +648,14 @@ int main() {
   C_def.def_print();
 
   // Add Matrices
+  before = timer::now();
   C_def.def_addMatrices(A_def, B_def);
+  after = timer::now();
 
   // Print Results
   cout << "\nAdded Matrix using Def (C_def = A_def + B_def):\n";
   C_def.def_print();
+  cout << "Adding Two Matrices using Def took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   // Exercise 53.7 CODE End
 
@@ -714,7 +736,7 @@ int main() {
       D_mult.at(i, j) = 0.0;
     }
   }
-  using timer = std::chrono::system_clock;
+
   // Print Matrices
   cout << "\nMatrix A_mult:\n";
   A_mult.def_print();
@@ -728,17 +750,17 @@ int main() {
   cout << "\nMatrix E_mult:\n";
   E_mult.def_print();
 
-  timer::time_point before = timer::now();
+  before = timer::now();
   // Perform Traditional Matrix Multiplication
   A_mult.MatMult(B_mult, D_mult);
-  auto after = timer::now();
-  cout << "Traditional Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << "ns\n";
+  after = timer::now();
+  cout << "Traditional Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   before = timer::now();
   // Perform Recursive Blocked Matrix Multiplication
   A_mult.BlockedMatMult(B_mult, E_mult);
   after = timer::now();
-  cout << "Recursive Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << "ns\n";
+  cout << "Recursive Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   // Print Resulting Matrix
   cout << "\nResulting Matrix D_mult (A_mult * B_mult):\n";
