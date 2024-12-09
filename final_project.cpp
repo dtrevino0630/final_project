@@ -224,7 +224,7 @@ public:
 
 
   // Indexing with #define
-#define AT(i, j) data[j * lda + i]
+#define AT(i, j) data[(j) * lda + (i)]
 
   // Matrix Addition with Debug and Optimized Access
   void def_addMat(const Matrix_Span& A, const Matrix_Span& B) {
@@ -234,7 +234,7 @@ public:
 
     for (auto i = 0; i < m; ++i) {
       for (auto j = 0; j < n; ++j) {
-        AT(i, j) = A.AT(i, j) + B.AT(i, j);
+        at(i, j) = A.at(i, j) + B.at(i, j);
       }
     }
   }
@@ -259,13 +259,24 @@ public:
 
   //Block Submatrices
   // Top rows | Left cols
-  Matrix_Span TopLeft(int rows, int cols) const { return Matrix_Span(rows, lda, cols, data.data()); }
+  Matrix_Span TopLeft(int rows, int cols) const {
+    return Matrix_Span(rows, lda, cols, data.data());
+  }
+
   // Top rows | Right cols
-  Matrix_Span TopRight(int rows, int cols) const { return Matrix_Span(rows, lda, n - cols, data.data() + cols * lda); }
+  Matrix_Span TopRight(int rows, int cols) const {
+    return Matrix_Span(rows, lda, n - cols, data.data() + cols * lda);
+  }
+
   // Bottom rows | Left cols
-  Matrix_Span BotLeft(int rows, int cols) const { return Matrix_Span(m - rows, lda, cols, data.data() + rows); }
+  Matrix_Span BotLeft(int rows, int cols) const {
+    return Matrix_Span(m - rows, lda, cols, data.data() + rows);
+  }
+
   // Bottom rows | Right cols
-  Matrix_Span BotRight(int rows, int cols) const { return Matrix_Span(m - rows, lda, n - cols, data.data() + rows + cols * lda); }
+  Matrix_Span BotRight(int rows, int cols) const {
+    return Matrix_Span(m - rows, lda, n - cols, data.data() + rows + cols * lda);
+  }
 
   // Exercise 53.8 METHODS End
 
@@ -280,7 +291,7 @@ public:
     // Zero initialize output Matrix
     for (auto i = 0; i < out.m; ++i) {
       for (auto j = 0; j < out.n; ++j) {
-        out.AT(i, j) = 0.0;
+        out.at(i, j) = 0.0;
       }
     }
 
@@ -288,7 +299,7 @@ public:
     for (auto i = 0; i < m; ++i) {
       for (auto j = 0; j < other.n; ++j) {
         for (auto k = 0; k < n; ++k) {
-          out.AT(i, j) += AT(i, k) * other.AT(k, j);
+          out.at(i, j) += at(i, k) * other.at(k, j);
         }
       }
     }
@@ -301,9 +312,9 @@ public:
     }
 
     // Divide Matrices into Submatricies
-    int midM = m / 2 + (m % 2);
-    int midN = n / 2 + (n % 2);
-    int midP = other.n / 2 + (other.n % 2);
+    int midM = m / 2;
+    int midN = n / 2;
+    int midP = other.n / 2;
 
     Matrix_Span A11 = TopLeft(midM, midN);
     Matrix_Span A12 = TopRight(midM, midN);
@@ -321,10 +332,13 @@ public:
     Matrix_Span C22 = out.BotRight(midM, midP);
 
     // Temporary matrices to store intermediate results
-    vector<double> temp1_data(midM * midP, 0.0);
-    vector<double> temp2_data(midM * midP, 0.0);
+    vector<double> temp1_data(midM * midP);
+    vector<double> temp2_data(midM * midP);
     Matrix_Span temp1(midM, midP, midP, temp1_data.data());
     Matrix_Span temp2(midM, midP, midP, temp2_data.data());
+
+    //assert(temp1_data.size() >= midM * midP);
+    //assert(temp2_data.size() >= midM * midP);
 
     // Compute the 2 × 2 block matrix multiplication
     A11.MatMult(B11, temp1);
@@ -357,9 +371,9 @@ public:
     }
 
     // Divide matrices into submatrices
-    int midM = m / 2 + (m % 2);
-    int midN = n / 2 + (n % 2);
-    int midP = other.n / 2 + (other.n % 2);
+    int midM = m / 2;
+    int midN = n / 2;
+    int midP = other.n / 2;
 
     Matrix_Span A11 = TopLeft(midM, midN);
     Matrix_Span A12 = TopRight(midM, midN);
@@ -377,8 +391,8 @@ public:
     Matrix_Span C22 = out.BotRight(midM, midP);
 
     // Temporary matrices to store intermediate results
-    vector<double> rec1_data(midM * midP, 0.0);
-    vector<double> rec2_data(midM * midP, 0.0);
+    vector<double> rec1_data(midM * midP);
+    vector<double> rec2_data(midM * midP);
     Matrix_Span rec1(midM, midP, midP, rec1_data.data());
     Matrix_Span rec2(midM, midP, midP, rec2_data.data());
 
@@ -730,7 +744,6 @@ int main() {
   F_mult.def_print();
   cout << "Recursive Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
-  /**
   // Testing Speed of 8x8 Matrix
   int m_t = 8;
   int n_t = 8;
@@ -744,8 +757,8 @@ int main() {
   vector<double> temp_t3(lda_t * n_t, 0.0);
   for (auto i = 0; i < m_t; ++i) {
     for (auto j = 0; j < n_t; ++j) {
-      data_mult1[j * lda_t + i] = i + j; // Initialize with unique values
-      data_mult2[j * lda_t + i] = i - j; // Initialize with unique values
+      data_t1[j * lda_t + i] = i + j; // Initialize with unique values
+      data_t2[j * lda_t + i] = i - j; // Initialize with unique values
     }
   }
 
@@ -761,14 +774,27 @@ int main() {
   A_t.MatMult(B_t, D_t);
   after = timer::now();
 
+  // Print Resulting Matrix
+  cout << "\nResulting Matrix D_mult (A_mult * B_mult):\n";
+  D_t.def_print();
+  cout << "Traditional Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
+
   before = timer::now();
   // Perform Blocked Matrix Multiplication
   A_t.BlockedMatMult(B_t, E_t);
   after = timer::now();
+  // Print Resulting Matrix
+  cout << "\nResulting Matrix E_mult (A_mult * B_mult):\n";
+  E_t.def_print();
+  cout << "Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   before = timer::now();
   A_t.RecursiveMatMult(B_t, F_t);
   after = timer::now();
+  // Print Resulting Matrix
+  cout << "\nResulting Matrix F_mult (A_mult * B_mult):\n";
+  F_t.def_print();
+  cout << "Recursive Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   // Print Matrices
   cout << "\nMatrix A_mult:\n";
@@ -777,18 +803,5 @@ int main() {
   cout << "\nMatrix B_mult:\n";
   B_t.def_print();
 
-  // Print Resulting Matrix
-  cout << "\nResulting Matrix D_mult (A_mult * B_mult):\n";
-  D_t.def_print();
-  cout << "Traditional Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
-
-  cout << "\nResulting Matrix E_mult (A_mult * B_mult):\n";
-  E_t.def_print();
-  cout << "Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
-
-  cout << "\nResulting Matrix F_mult (A_mult * B_mult):\n";
-  F_t.def_print();
-  cout << "Recursive Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
-    **/
   return 0;
 }
