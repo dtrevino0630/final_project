@@ -76,29 +76,6 @@ public:
     return result;
   }
 
-  // Recursive Matrix-Matrix Multiplication
-  Matrix MatMultRecur(const Matrix& other) const {
-    if (cols != other.rows)
-      throw std::invalid_argument("Matrix dimensions do not allow multiplication.");
-
-    // Determine the required size (next power of 2)
-    int maxSize = max({row_size(), col_size(), other.row_size(), other.col_size()});
-    int newSize = 1;
-    while (newSize < maxSize) newSize *= 2;
-
-    // Pad matrices to be square and power-of-2 sized
-    Matrix paddedA = padMatrix(*this, newSize);
-    Matrix paddedB = padMatrix(other, newSize);
-
-    // Perform recursive multiplication on padded matrices
-    Matrix paddedResult = recursiveHelper(paddedA, paddedB);
-
-    // Extract the result submatrix of original dimensions
-    return paddedResult.subMatrix(0, 0, row_size(), other.col_size());
-
-  }
-
-private:
   // Extract submatrix from (rowStart, colStart) of size (subRows x subCols)
   Matrix subMatrix(int rowStart, int colStart, int subRows, int subCols) const {
     Matrix result(subRows, subCols);
@@ -119,6 +96,7 @@ private:
     }
   }
 
+  // Add Matrices together
   Matrix addMatrices(const Matrix& A, const Matrix& B) const {
     if (A.row_size() != B.row_size() || A.col_size() != B.col_size()) {
       throw std::invalid_argument("Matrix dimensions must match for addition.");
@@ -133,51 +111,65 @@ private:
     return result;
   }
 
-  Matrix padMatrix(const Matrix& original, int newSize) const {
-    Matrix padded(newSize, newSize);
-    for (int i = 0; i < original.row_size(); ++i) {
-      for (int j = 0; j < original.col_size(); ++j) {
-        padded.at(i, j) = original.at(i, j);
+  // Matrix Padding
+  Matrix padMatrix(const Matrix& mat) const {
+    int n = max(mat.row_size(), mat.col_size());
+    int size = 1;
+
+    while (size < n) size *= 2;
+    Matrix padded(size, size);
+    for (auto i = 0; i < mat.row_size(); ++i) {
+      for (auto j = 0; j < mat.col_size(); ++j) {
+        padded.at(i, j) = mat.at(i, j);
       }
     }
     return padded;
   }
 
-  // Helper function for recursive multiplication
-  Matrix recursiveHelper(const Matrix& A, const Matrix& B) const {
+  // Recursive Matrix-Matrix Multiplication
+  Matrix MatMultRecur(const Matrix& other) const {
+    if (cols != other.rows)
+      throw std::invalid_argument("Matrix dimensions do not allow multiplication.");
+
+    Matrix A = padMatrix(*this);
+    Matrix B = padMatrix(other);
     int n = A.row_size();
+
+    Matrix result(n, n);
     if (n == 1) {
       // Base case: 1x1 Matrix Multiplication
-      return Matrix({{A.at(0,0) * B.at(0, 0)}});
+      result.at(0, 0) = data[0][0] * other.at(0, 0);
+      return result;
     }
 
     int mid = n / 2;
 
     // Divide Matrices into 4 submatrices
-    auto A11 = A.subMatrix(0, 0, mid, mid);
-    auto A12 = A.subMatrix(0, mid, mid, n - mid);
-    auto A21 = A.subMatrix(mid, 0, n - mid, mid);
-    auto A22 = A.subMatrix(mid, mid, n - mid, n - mid);
+    Matrix A11 = A.subMatrix(0, 0, mid, mid);
+    Matrix A12 = A.subMatrix(0, mid, mid, n - mid);
+    Matrix A21 = A.subMatrix(mid, 0, n - mid, mid);
+    Matrix A22 = A.subMatrix(mid, mid, n - mid, n - mid);
 
-    auto B11 = B.subMatrix(0, 0, mid, mid);
-    auto B12 = B.subMatrix(0, mid, mid, n - mid);
-    auto B21 = B.subMatrix(mid, 0, n - mid, mid);
-    auto B22 = B.subMatrix(mid, mid, n - mid, n - mid);
+    Matrix B11 = B.subMatrix(0, 0, mid, mid);
+    Matrix B12 = B.subMatrix(0, mid, mid, n - mid);
+    Matrix B21 = B.subMatrix(mid, 0, n - mid, mid);
+    Matrix B22 = B.subMatrix(mid, mid, n - mid, n - mid);
 
     // Recursive multiplication and addition of submatrices
-    auto C11 = addMatrices(A11.MatMultRecur(B11), A12.MatMultRecur(B21));
-    auto C12 = addMatrices(A11.MatMultRecur(B12), A12.MatMultRecur(B22));
-    auto C21 = addMatrices(A21.MatMultRecur(B11), A22.MatMultRecur(B21));
-    auto C22 = addMatrices(A21.MatMultRecur(B12), A22.MatMultRecur(B22));
+    Matrix C11 = addMatrices(A11.MatMultRecur(B11), A12.MatMultRecur(B21));
+    Matrix C12 = addMatrices(A11.MatMultRecur(B12), A12.MatMultRecur(B22));
+    Matrix C21 = addMatrices(A21.MatMultRecur(B11), A22.MatMultRecur(B21));
+    Matrix C22 = addMatrices(A21.MatMultRecur(B12), A22.MatMultRecur(B22));
 
     // Combine results into one matrix
-    Matrix result(n, n);
     result.writeSubMatrix(0, 0, C11);
     result.writeSubMatrix(0, mid, C12);
     result.writeSubMatrix(mid, 0, C21);
     result.writeSubMatrix(mid, mid, C22);
 
-    return result;
+    // Extract the result submatrix of original dimensions
+    return result.subMatrix(0, 0, rows, other.col_size());
+
   }
 };
 
@@ -188,13 +180,8 @@ private:
   span<double> data; // Non-owning view of data
 public:
   // Constructer for top-level matrix
-  Matrix_Span(int m, int lda, int n, double* ptr)
-    : m(m), lda(lda), n(n), data(ptr, lda * n)
-  {}
-
-  // Constructor for submatrix
-  Matrix_Span(int m, int lda, int n, span<double> parent, int rowOffset, int colOffset)
-     : m(m), lda(lda), n(n), data(parent.subspan(colOffset * lda + rowOffset, m * n))
+  Matrix_Span(int m, int lda, int n, double* data)
+    : m(m), lda(lda), n(n), data(data, lda * n)
   {}
 
   // Print matrix
@@ -235,35 +222,21 @@ public:
 
   // Exercise 53.7 METHODS Start
 
+
+  // Indexing with #define
+#define AT(i, j) data[j * lda + i]
+
   // Matrix Addition with Debug and Optimized Access
-  void def_addMatrices(const Matrix_Span& A, const Matrix_Span& B) {
+  void def_addMat(const Matrix_Span& A, const Matrix_Span& B) {
     if (m != A.m ||  n != A.n || m != B.m || n != B.n) {
       throw std::invalid_argument("Matrix dimensions must match for addition.");
     }
 
-    double* cdata = const_cast<double*>(data.data());
-    double* adata = const_cast<double*>(A.data.data());
-    double* bdata = const_cast<double*>(B.data.data());
-
-// Define Indexing Macros
-#define C_INDEX(i, j) cdata[(j) * lda + (i)]
-#define A_INDEX(i, j) adata[(j) * A.lda + (i)]
-#define B_INDEX(i, j) bdata[(j) * B.lda + (i)]
-
     for (auto i = 0; i < m; ++i) {
       for (auto j = 0; j < n; ++j) {
-        #ifdef DEBUG
-        at(i, j) = A.at(i, j) + B.at(i, j);
-        #else
-        C_INDEX(i, j) = A_INDEX(i, j) + B_INDEX(i, j);
-        #endif
+        AT(i, j) = A.AT(i, j) + B.AT(i, j);
       }
     }
-
-    // Undefine Macros to Avoid Conflict
-    #undef C_INDEX
-    #undef A_INDEX
-    #undef B_INDEX
   }
 
   // Print Matrix with def
@@ -284,21 +257,15 @@ public:
 
   // Exercise 53.8 METHODS Start
 
-  // Submatrix methods
-  Matrix_Span Left(int j) const { return Matrix_Span(m, lda, j, data, 0, 0); } // n = j (cols < j)
-  Matrix_Span Right(int j) const { return Matrix_Span(m, lda, n - j, data, 0, j); } // n = n - j (cols >= j)
-  Matrix_Span Top(int i) const { return Matrix_Span(i, lda, n, data, 0, 0); } // m = i (rows < i)
-  Matrix_Span Bot(int i) const { return Matrix_Span(m - i, lda, n, data, i, 0); } // m = m - i (rows >= i)
-
   //Block Submatrices
   // Top rows | Left cols
-  Matrix_Span TopLeft(int rows, int cols) const { return Matrix_Span(rows, lda, cols, data, 0, 0); }
+  Matrix_Span TopLeft(int rows, int cols) const { return Matrix_Span(rows, lda, cols, data.data()); }
   // Top rows | Right cols
-  Matrix_Span TopRight(int rows, int cols) const { return Matrix_Span(rows, lda, n - cols, data, 0, cols); }
+  Matrix_Span TopRight(int rows, int cols) const { return Matrix_Span(rows, lda, n - cols, data.data() + cols * lda); }
   // Bottom rows | Left cols
-  Matrix_Span BotLeft(int rows, int cols) const { return Matrix_Span(m - rows, lda, cols, data, rows, 0); }
+  Matrix_Span BotLeft(int rows, int cols) const { return Matrix_Span(m - rows, lda, cols, data.data() + rows); }
   // Bottom rows | Right cols
-  Matrix_Span BotRight(int rows, int cols) const { return Matrix_Span(m - rows, lda, n - cols, data, rows, cols); }
+  Matrix_Span BotRight(int rows, int cols) const { return Matrix_Span(m - rows, lda, n - cols, data.data() + rows + cols * lda); }
 
   // Exercise 53.8 METHODS End
 
@@ -310,112 +277,127 @@ public:
       throw std::invalid_argument("Matrix dimensions do not allow multiplication.");
     }
 
+    // Zero initialize output Matrix
+    for (auto i = 0; i < out.m; ++i) {
+      for (auto j = 0; j < out.n; ++j) {
+        out.AT(i, j) = 0.0;
+      }
+    }
+
+    // Perform Matrix Multiplication
     for (auto i = 0; i < m; ++i) {
       for (auto j = 0; j < other.n; ++j) {
         for (auto k = 0; k < n; ++k) {
-          out.at(i, j) += this->at(i, k) * other.at(k, j);
+          out.AT(i, j) += AT(i, k) * other.AT(k, j);
         }
       }
     }
   }
 
-  // Blocked Matrix Multiplication
+  // Block Matrix Multiplication (One Level Block)
   void BlockedMatMult(Matrix_Span& other, Matrix_Span& out) const {
     if (n != other.m || m != out.m || other.n != out.n) {
       throw std::invalid_argument("Matrix dimensions do not allow multiplication.");
     }
 
-    int mid = m / 2; // Assuming square matrix divisible by 2
-
-    // Top-left
-    Matrix_Span A11 = this->TopLeft(mid, mid);
-    Matrix_Span B11 = other.TopLeft(mid, mid);
-    Matrix_Span C11 = out.TopLeft(mid, mid);
-
-    // Top-right
-    Matrix_Span A12 = this->TopRight(mid, mid);
-    Matrix_Span B21 = other.BotLeft(mid, mid);
-    Matrix_Span C12 = out.TopRight(mid, mid);
-
-    // Bottom-left
-    Matrix_Span A21 = this->BotLeft(mid, mid);
-    Matrix_Span B12 = other.TopRight(mid, mid);
-    Matrix_Span C21 = out.BotLeft(mid, mid);
-
-    // Bottom-right
-    Matrix_Span A22 = this->BotRight(mid, mid);
-    Matrix_Span B22 = other.BotRight(mid, mid);
-    Matrix_Span C22 = out.BotRight(mid, mid);
-
-    // Recursive Computation
-    A11.RecursiveMatMult(B11, C11);
-    A12.RecursiveMatMult(B21, C11);
-
-    A11.RecursiveMatMult(B12, C12);
-    A12.RecursiveMatMult(B22, C12);
-
-    A21.RecursiveMatMult(B11, C21);
-    A22.RecursiveMatMult(B21, C21);
-
-    A21.RecursiveMatMult(B12, C22);
-    A22.RecursiveMatMult(B22, C22);
-  }
-
-  // Recursive Matrix Multiplication
-  void RecursiveMatMult(Matrix_Span& other, Matrix_Span& out) const {
-    if (m == 1 && n == 1 && other.n == 1) {
-      out.at(0, 0) += this->at(0, 0) * other.at(0, 0);
-        return;
-    }
-
-    if (m <= 2 || n <= 2 || other.n <= 2) {
-      this->MatMult(other, out);
-      return;
-    }
-
-    // Midpoint for division
-    int midM = m / 2 + (m % 2); // Padding for odd dimensions
-    int midN = n / 2 + (m % 2);
+    // Divide Matrices into Submatricies
+    int midM = m / 2 + (m % 2);
+    int midN = n / 2 + (n % 2);
     int midP = other.n / 2 + (other.n % 2);
 
-    // Divide matrices into submatrices
-    auto A11 = this->TopLeft(midM, midN);
-    auto A12 = this->TopRight(midM, midN);
-    auto A21 = this->BotLeft(midM, midN);
-    auto A22 = this->BotRight(midM, midN);
+    Matrix_Span A11 = TopLeft(midM, midN);
+    Matrix_Span A12 = TopRight(midM, midN);
+    Matrix_Span A21 = BotLeft(midM, midN);
+    Matrix_Span A22 = BotRight(midM, midN);
 
-    auto B11 = other.TopLeft(midN, midP);
-    auto B12 = other.TopRight(midN, midP);
-    auto B21 = other.BotLeft(midN, midP);
-    auto B22 = other.BotRight(midN, midP);
+    Matrix_Span B11 = other.TopLeft(midN, midP);
+    Matrix_Span B12 = other.TopRight(midN, midP);
+    Matrix_Span B21 = other.BotLeft(midN, midP);
+    Matrix_Span B22 = other.BotRight(midN, midP);
 
-    auto C11 = out.TopLeft(midM, midP);
-    auto C12 = out.TopRight(midM, midP);
-    auto C21 = out.BotLeft(midM, midP);
-    auto C22 = out.BotRight(midM, midP);
+    Matrix_Span C11 = out.TopLeft(midM, midP);
+    Matrix_Span C12 = out.TopRight(midM, midP);
+    Matrix_Span C21 = out.BotLeft(midM, midP);
+    Matrix_Span C22 = out.BotRight(midM, midP);
 
     // Temporary matrices to store intermediate results
     vector<double> temp1_data(midM * midP, 0.0);
     vector<double> temp2_data(midM * midP, 0.0);
-    Matrix_Span temp1(midM, midM, midP, temp1_data.data());
-    Matrix_Span temp2(midM, midM, midP, temp2_data.data());
+    Matrix_Span temp1(midM, midP, midP, temp1_data.data());
+    Matrix_Span temp2(midM, midP, midP, temp2_data.data());
 
-    // Compute the 2x2 block matrix multiplication
-    A11.RecursiveMatMult(B11, temp1);
-    A12.RecursiveMatMult(B21, temp2);
-    C11.def_addMatrices(temp1, temp2);
+    // Compute the 2 × 2 block matrix multiplication
+    A11.MatMult(B11, temp1);
+    A12.MatMult(B21, temp2);
+    C11.def_addMat(temp1, temp2);
 
-    A11.RecursiveMatMult(B12, temp1);
-    A12.RecursiveMatMult(B22, temp2);
-    C12.def_addMatrices(temp1, temp2);
+    A11.MatMult(B12, temp1);
+    A12.MatMult(B22, temp2);
+    C12.def_addMat(temp1, temp2);
 
-    A21.RecursiveMatMult(B11, temp1);
-    A22.RecursiveMatMult(B21, temp2);
-    C21.def_addMatrices(temp1, temp2);
+    A21.MatMult(B11, temp1);
+    A22.MatMult(B21, temp2);
+    C21.def_addMat(temp1, temp2);
 
-    A21.RecursiveMatMult(B12, temp1);
-    A22.RecursiveMatMult(B22, temp2);
-    C22.def_addMatrices(temp1, temp2);
+    A21.MatMult(B12, temp1);
+    A22.MatMult(B22, temp2);
+    C22.def_addMat(temp1, temp2);
+  }
+
+  // Recursive Block Matrix Multiplication
+  void RecursiveMatMult(Matrix_Span& other, Matrix_Span& out) const {
+    if (n != other.m || m != out.m || other.n != out.n) {
+      throw std::invalid_argument("Matrix dimensions do not allow multiplication.");
+    }
+
+    // Base case: Use regular matrix multiplication for small matrices
+    if (m <= 2 || n <= 2 || other.n <= 2) {
+      MatMult(other, out);
+      return;
+    }
+
+    // Divide matrices into submatrices
+    int midM = m / 2 + (m % 2);
+    int midN = n / 2 + (n % 2);
+    int midP = other.n / 2 + (other.n % 2);
+
+    Matrix_Span A11 = TopLeft(midM, midN);
+    Matrix_Span A12 = TopRight(midM, midN);
+    Matrix_Span A21 = BotLeft(midM, midN);
+    Matrix_Span A22 = BotRight(midM, midN);
+
+    Matrix_Span B11 = other.TopLeft(midN, midP);
+    Matrix_Span B12 = other.TopRight(midN, midP);
+    Matrix_Span B21 = other.BotLeft(midN, midP);
+    Matrix_Span B22 = other.BotRight(midN, midP);
+
+    Matrix_Span C11 = out.TopLeft(midM, midP);
+    Matrix_Span C12 = out.TopRight(midM, midP);
+    Matrix_Span C21 = out.BotLeft(midM, midP);
+    Matrix_Span C22 = out.BotRight(midM, midP);
+
+    // Temporary matrices to store intermediate results
+    vector<double> rec1_data(midM * midP, 0.0);
+    vector<double> rec2_data(midM * midP, 0.0);
+    Matrix_Span rec1(midM, midP, midP, rec1_data.data());
+    Matrix_Span rec2(midM, midP, midP, rec2_data.data());
+
+    // Recursive computations for 2 × 2 block product
+    A11.RecursiveMatMult(B11, rec1);
+    A12.RecursiveMatMult(B21, rec2);
+    C11.def_addMat(rec1, rec2);
+
+    A11.RecursiveMatMult(B12, rec1);
+    A12.RecursiveMatMult(B22, rec2);
+    C12.def_addMat(rec1, rec2);
+
+    A21.RecursiveMatMult(B11, rec1);
+    A22.RecursiveMatMult(B21, rec2);
+    C21.def_addMat(rec1, rec2);
+
+    A21.RecursiveMatMult(B12, rec1);
+    A22.RecursiveMatMult(B22, rec2);
+    C22.def_addMat(rec1, rec2);
   }
 
   // Exercise 53.9 METHODS End
@@ -432,12 +414,7 @@ public:
   Matrix_Mdspan(int m, int lda, int n, double* ptr)
     : m(m), lda(lda), n(n), data(ptr, lda, n)
   {}
-    /**
-  // Constructor for submatrix
-    Matrix_Mdspan(int m, int lda, int n, mdspan<double, dextents<int, 2>> parent, int rowOffset, int colOffset)
-      : m(m), lda(lda), n(n), data(parent.data_handle() + colOffset * lda + rowOffset, lda * n)
-  {}
-      **/
+
     // Print matrix
     void print() const {
       for (auto i = 0; i < m; ++i) {
@@ -556,19 +533,8 @@ int main() {
   cout << "\nTop-Level Matrix:\n";
   one.print();
 
-  // Create submatrix
-  Matrix_Span sub(m, lda, 2, span<double>(data_1), 0, 1);
-
-  // Print submatrix
-  cout << "\nSubmatrix:\n";
-  sub.print();
-
-  // Modify element within submatrix
-  sub.at(1, 0) = 99;
-
-  // Print updated submatrix
-  cout << "\nUpdated Submatrix:\n";
-  sub.print();
+  // Modify element within matrix
+  one.at(1, 0) = 99;
 
   // Print updated top-level matrix
   cout << "\nUpdated Top-Level Matrix\n";
@@ -576,9 +542,6 @@ int main() {
 
   // Print out value at i = 0 and j = 1 for top-level matrix
   cout << "\nTop-Level Matrix (0, 1): " << one.at(0, 1);
-
-  // Print out value at i = 1 and j = 0 for submatrix
-  cout << "\nSubmatrix (0, 1): " << sub.at(1, 0) << '\n';
 
   // Exercise 54.3 CODE End
 
@@ -649,7 +612,7 @@ int main() {
 
   // Add Matrices
   before = timer::now();
-  C_def.def_addMatrices(A_def, B_def);
+  C_def.def_addMat(A_def, B_def);
   after = timer::now();
 
   // Print Results
@@ -681,25 +644,17 @@ int main() {
   S.def_print();
 
   // Test Submatrix Methods
-  cout << "\nLeft(3):\n";
-  Matrix_Span left = S.Left(3);
-  left.print();
-
-  cout << "\nRight(3):\n";
-  Matrix_Span right = S.Right(3);
-  right.print();
-
-  cout << "\nTop(2):\n";
-  Matrix_Span top = S.Top(2);
-  top.print();
-
-  cout << "\nBot(2):\n";
-  Matrix_Span bot = S.Bot(2);
-  bot.print();
-
   cout << "\nTopLeft(2, 3):\n";
   Matrix_Span topLeft = S.TopLeft(2, 3);
   topLeft.print();
+
+  cout << "\nTopRight(2, 3):\n";
+  Matrix_Span topRight = S.TopRight(2, 3);
+  topRight.print();
+
+  cout << "\nBotLeft(2, 3):\n";
+  Matrix_Span botLeft = S.BotLeft(2, 3);
+  botLeft.print();
 
   cout << "\nBotRight(2, 3):\n";
   Matrix_Span botRight = S.BotRight(2, 3);
@@ -715,13 +670,14 @@ int main() {
 
   // Create storage for matrix
   vector<double> data_mult1(lda_mult * n_mult, 0.0);
-  vector<double> data_mult2(lda_mult * n_mult, 1.0);
+  vector<double> data_mult2(lda_mult * n_mult, 0.0);
   vector<double> temp_mult1(lda_mult * n_mult, 0.0);
   vector<double> temp_mult2(lda_mult * n_mult, 0.0);
-  for (auto i = 0; i < m_sub; ++i) {
-    for (auto j = 0; j < n_sub; ++j) {
-      data_mult1[j * lda_sub + i] = i + j * 0.1; // Initialize with unique values
-      data_mult2[j * lda_sub + i] = i + j * 0.1; // Initialize with unique values
+  vector<double> temp_mult3(lda_mult * n_mult, 0.0);
+  for (auto i = 0; i < m_mult; ++i) {
+    for (auto j = 0; j < n_mult; ++j) {
+      data_mult1[j * lda_mult + i] = i + j * 1; // Initialize with unique values
+      data_mult2[j * lda_mult + i] = i + j * 2; // Initialize with unique values
     }
   }
 
@@ -730,12 +686,7 @@ int main() {
   Matrix_Span B_mult(m_mult, lda_mult, n_mult, data_mult2.data());
   Matrix_Span D_mult(m_mult, lda_mult, n_mult, temp_mult1.data());
   Matrix_Span E_mult(m_mult, lda_mult, n_mult, temp_mult2.data());
-
-  for (auto i = 0; i < m_mult; ++i) {
-    for (auto j = 0; j < n_mult; ++j) {
-      D_mult.at(i, j) = 0.0;
-    }
-  }
+  Matrix_Span F_mult(m_mult, lda_mult, n_mult, temp_mult3.data());
 
   // Print Matrices
   cout << "\nMatrix A_mult:\n";
@@ -750,24 +701,94 @@ int main() {
   cout << "\nMatrix E_mult:\n";
   E_mult.def_print();
 
+  cout << "\nMatrix F_mult:\n";
+  F_mult.def_print();
+
   before = timer::now();
   // Perform Traditional Matrix Multiplication
   A_mult.MatMult(B_mult, D_mult);
   after = timer::now();
+  // Print Results
+  cout << "\nResulting Matrix D_mult (A_mult * B_mult):\n";
+  D_mult.def_print();
   cout << "Traditional Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
-
   before = timer::now();
-  // Perform Recursive Blocked Matrix Multiplication
+
+  // Perform Blocked Matrix Multiplication
   A_mult.BlockedMatMult(B_mult, E_mult);
   after = timer::now();
-  cout << "Recursive Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
+  // Print Results
+  cout << "\nResulting Matrix E_mult (A_mult * B_mult):\n";
+  E_mult.def_print();
+  cout << "Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
+
+  before = timer::now();
+  A_mult.RecursiveMatMult(B_mult, F_mult);
+  after = timer::now();
+  // Print Results
+  cout << "\nResulting Matrix F_mult (A_mult * B_mult):\n";
+  F_mult.def_print();
+  cout << "Recursive Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
+
+  /**
+  // Testing Speed of 8x8 Matrix
+  int m_t = 8;
+  int n_t = 8;
+  int lda_t = 8;
+
+  // Create storage for matrix
+  vector<double> data_t1(lda_t * n_t, 0.0);
+  vector<double> data_t2(lda_t * n_t, 0.0);
+  vector<double> temp_t1(lda_t * n_t, 0.0);
+  vector<double> temp_t2(lda_t * n_t, 0.0);
+  vector<double> temp_t3(lda_t * n_t, 0.0);
+  for (auto i = 0; i < m_t; ++i) {
+    for (auto j = 0; j < n_t; ++j) {
+      data_mult1[j * lda_t + i] = i + j; // Initialize with unique values
+      data_mult2[j * lda_t + i] = i - j; // Initialize with unique values
+    }
+  }
+
+  // Create Top-Level Matrices
+  Matrix_Span A_t(m_t, lda_t, n_t, data_t1.data());
+  Matrix_Span B_t(m_t, lda_t, n_t, data_t2.data());
+  Matrix_Span D_t(m_t, lda_t, n_t, temp_t1.data());
+  Matrix_Span E_t(m_t, lda_t, n_t, temp_t2.data());
+  Matrix_Span F_t(m_t, lda_t, n_t, temp_t3.data());
+
+  before = timer::now();
+  // Perform Traditional Matrix Multiplication
+  A_t.MatMult(B_t, D_t);
+  after = timer::now();
+
+  before = timer::now();
+  // Perform Blocked Matrix Multiplication
+  A_t.BlockedMatMult(B_t, E_t);
+  after = timer::now();
+
+  before = timer::now();
+  A_t.RecursiveMatMult(B_t, F_t);
+  after = timer::now();
+
+  // Print Matrices
+  cout << "\nMatrix A_mult:\n";
+  A_t.def_print();
+
+  cout << "\nMatrix B_mult:\n";
+  B_t.def_print();
 
   // Print Resulting Matrix
   cout << "\nResulting Matrix D_mult (A_mult * B_mult):\n";
-  D_mult.def_print();
+  D_t.def_print();
+  cout << "Traditional Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
   cout << "\nResulting Matrix E_mult (A_mult * B_mult):\n";
-  E_mult.def_print();
+  E_t.def_print();
+  cout << "Block Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
 
+  cout << "\nResulting Matrix F_mult (A_mult * B_mult):\n";
+  F_t.def_print();
+  cout << "Recursive Method took: " << duration_cast<std::chrono::nanoseconds>(after-before).count() << " ns\n";
+    **/
   return 0;
 }
